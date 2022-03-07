@@ -2,6 +2,7 @@ package sync
 
 import (
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/secretsmanager"
@@ -31,14 +32,14 @@ func (s *SecretSync) SyncSecrets(region string, filters []*secretsmanager.Filter
 
 	var total int64
 	for _, secret := range secrets {
-		if secret == nil || secret.DeletedDate == nil {
+		if secret == nil {
 			continue
 		}
-		total++
 		// TODO: continue to check sync secret
 		if err := s.syncSecret(region, secret); err != nil {
 			return errors.Wrapf(err, "sync \"%s\"", utils.Ptr2str(secret.Name))
 		}
+		total++
 	}
 	logrus.Infof("Sync total %d", total)
 
@@ -58,7 +59,7 @@ func (s *SecretSync) syncSecret(region string, secret *secretsmanager.SecretList
 
 	secretName := utils.Ptr2str(secret.Name)
 	cachedItem, existed := s.cache.Get(secretName)
-	if !existed || !lastChangeDate.After(cachedItem.LastChanged) {
+	if existed && !lastChangeDate.After(cachedItem.LastChanged) {
 		return nil
 	}
 
@@ -100,6 +101,9 @@ func (s *SecretSync) saveSecret(region string, secret *secretsmanager.SecretList
 	}
 
 	// save to file
+	if err := os.MkdirAll(filepath.Join(path), os.ModePerm); err != nil {
+		return err
+	}
 	return os.WriteFile(path+fileName, savingContent, 0644)
 }
 

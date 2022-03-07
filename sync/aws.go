@@ -2,7 +2,6 @@ package sync
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -14,7 +13,6 @@ func GetListSecrets(region string, filters []*secretsmanager.Filter, filterTags 
 	svc := secretsmanager.New(session.New(&aws.Config{
 		Region: aws.String(region),
 	}))
-	fmt.Println("DEBUG: ", region)
 	maxResult := int64(100)
 
 	index := 0

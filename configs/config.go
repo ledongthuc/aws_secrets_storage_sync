@@ -8,7 +8,7 @@ import (
 var defaultConfigurations = map[string]string{
 	awsRegion: "eu-north-1",
 
-	savingPath: "./secrets/",
+	savingPath: "./file_sync/",
 
 	syncPeriodSeconds: "15",
 	filterTags:        "",
