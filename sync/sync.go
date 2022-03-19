@@ -25,60 +25,71 @@ func NewSecretSync() *SecretSync {
 }
 
 func (s *SecretSync) SyncSecrets(region string, filters []*secretsmanager.Filter, filterTags [][2]string) error {
+	logrus.Infof("Sync start")
 	secrets, err := GetListSecrets(region, filters, filterTags)
 	if err != nil {
 		return errors.Wrap(err, "load secrets")
 	}
+	savingPath := configs.GetSavingPath()
 
 	var total int64
 	for _, secret := range secrets {
 		if secret == nil {
 			continue
 		}
-		// TODO: continue to check sync secret
-		if err := s.syncSecret(region, secret); err != nil {
-			return errors.Wrapf(err, "sync \"%s\"", utils.Ptr2str(secret.Name))
+		err, cached, syncName := s.syncSecret(region, secret, savingPath)
+		if err != nil {
+			logrus.Warnf(" - %s: sync failed: %v", utils.Ptr2str(secret.Name), err)
+		} else if cached {
+			logrus.Infof(" - %s: nothing change: use cache", utils.Ptr2str(secret.Name))
+			total++
+		} else {
+			logrus.Infof(" - %s: sync successful with %s%s", utils.Ptr2str(secret.Name), savingPath, syncName)
+			total++
 		}
-		total++
 	}
-	logrus.Infof("Sync total %d", total)
+	logrus.Infof("Sync result, total: %d", total)
 
 	return nil
 }
 
-func (s *SecretSync) syncSecret(region string, secret *secretsmanager.SecretListEntry) error {
+func (s *SecretSync) syncSecret(region string, secret *secretsmanager.SecretListEntry, savingPath string) (err error, cached bool, syncName string) {
 	if secret == nil {
-		return nil
+		return errors.New("error is nil"), false, syncName
 	}
 
 	// check cache and pass if nothing changed
 	lastChangeDate, err := getLastChangeDate(secret)
 	if err != nil {
-		return errors.Wrap(err, "load change date")
+		return errors.Wrap(err, "load change date"), false, syncName
 	}
 
 	secretName := utils.Ptr2str(secret.Name)
 	cachedItem, existed := s.cache.Get(secretName)
 	if existed && !lastChangeDate.After(cachedItem.LastChanged) {
-		return nil
+		return nil, true, syncName
 	}
 
-	// Saving physical file
-	fileName := cachedItem.FileName
+	syncName = cachedItem.FileName
 	if !existed {
-		fileName = utils.RandomString(32)
+		syncName = utils.Md5(secretName)
 	}
-	savingPath := configs.GetSavingPath()
-	err = s.saveSecret(region, secret, savingPath, fileName)
+
+	// Clear cached physical items sync new one
+	if existed {
+		s.removeOldPhysicalCachedSecret(savingPath, cachedItem.FileName)
+	}
+	// Saving physical file
+	err = s.saveSecret(region, secret, savingPath, syncName)
 	if err != nil {
-		return errors.Wrapf(err, "save file '%s' in path '%s'", fileName, savingPath)
+		return errors.Wrapf(err, "save file '%s' in path '%s'", syncName, savingPath), false, syncName
 	}
 
 	// Update cache after save successful
 	cachedItem.LastChanged = lastChangeDate
-	cachedItem.FileName = fileName
+	cachedItem.FileName = syncName
 	s.cache.Set(secretName, cachedItem)
-	return nil
+	return nil, false, syncName
 }
 
 func (s *SecretSync) saveSecret(region string, secret *secretsmanager.SecretListEntry, path, fileName string) error {
@@ -105,6 +116,10 @@ func (s *SecretSync) saveSecret(region string, secret *secretsmanager.SecretList
 		return err
 	}
 	return os.WriteFile(path+fileName, savingContent, 0644)
+}
+
+func (s *SecretSync) removeOldPhysicalCachedSecret(path, fileName string) error {
+	return os.Remove(path + fileName)
 }
 
 func getLastChangeDate(secret *secretsmanager.SecretListEntry) (time.Time, error) {
