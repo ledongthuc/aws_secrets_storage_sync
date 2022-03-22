@@ -16,7 +16,7 @@ var defaultConfigurations = map[string]string{
 }
 
 func Init() {
-	viper.SetEnvPrefix("AWS_SECRETS_STORAGE_SYNC")
+	viper.SetEnvPrefix("")
 	loadConfig()
 }
 
