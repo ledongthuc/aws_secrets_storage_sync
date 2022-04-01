@@ -2,6 +2,7 @@ package sync
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -18,13 +19,13 @@ type SecretSync struct {
 	cache *cache.SecretLastChanges
 }
 
-func NewSecretSync() *SecretSync {
+func NewSecretSync(cache *cache.SecretLastChanges) *SecretSync {
 	return &SecretSync{
-		cache: cache.NewSecretLastChanges(),
+		cache: cache,
 	}
 }
 
-func (s *SecretSync) SyncSecrets(region string, filters []*secretsmanager.Filter, filterTags [][2]string) error {
+func (s *SecretSync) SyncSecrets(region string, filters []*secretsmanager.Filter, filterTags [][2]string, encryption configs.EncryptionConfig) error {
 	logrus.Infof("Sync start")
 	secrets, err := GetListSecrets(region, filters, filterTags)
 	if err != nil {
@@ -37,7 +38,7 @@ func (s *SecretSync) SyncSecrets(region string, filters []*secretsmanager.Filter
 		if secret == nil {
 			continue
 		}
-		err, cached, syncName := s.syncSecret(region, secret, savingPath)
+		err, cached, syncName := s.syncSecret(region, secret, savingPath, encryption)
 		if err != nil {
 			logrus.Warnf(" - %s: sync failed: %v", utils.Ptr2str(secret.Name), err)
 		} else if cached {
@@ -53,7 +54,7 @@ func (s *SecretSync) SyncSecrets(region string, filters []*secretsmanager.Filter
 	return nil
 }
 
-func (s *SecretSync) syncSecret(region string, secret *secretsmanager.SecretListEntry, savingPath string) (err error, cached bool, syncName string) {
+func (s *SecretSync) syncSecret(region string, secret *secretsmanager.SecretListEntry, savingPath string, encryption configs.EncryptionConfig) (err error, cached bool, syncName string) {
 	if secret == nil {
 		return errors.New("error is nil"), false, syncName
 	}
@@ -80,7 +81,7 @@ func (s *SecretSync) syncSecret(region string, secret *secretsmanager.SecretList
 		s.removeOldPhysicalCachedSecret(savingPath, cachedItem.FileName)
 	}
 	// Saving physical file
-	err = s.saveSecret(region, secret, savingPath, syncName)
+	err = s.saveSecret(region, secret, savingPath, syncName, encryption)
 	if err != nil {
 		return errors.Wrapf(err, "save file '%s' in path '%s'", syncName, savingPath), false, syncName
 	}
@@ -88,11 +89,18 @@ func (s *SecretSync) syncSecret(region string, secret *secretsmanager.SecretList
 	// Update cache after save successful
 	cachedItem.LastChanged = lastChangeDate
 	cachedItem.FileName = syncName
+	absLocalPath, err := filepath.Abs(path.Join(savingPath, syncName))
+	if err != nil {
+		logrus.Warn("can't get abs path %s: %v", path.Join(savingPath, syncName), err)
+		cachedItem.LocalPath = path.Join(savingPath, syncName)
+	} else {
+		cachedItem.LocalPath = absLocalPath
+	}
 	s.cache.Set(secretName, cachedItem)
 	return nil, false, syncName
 }
 
-func (s *SecretSync) saveSecret(region string, secret *secretsmanager.SecretListEntry, path, fileName string) error {
+func (s *SecretSync) saveSecret(region string, secret *secretsmanager.SecretListEntry, path, fileName string, encryption configs.EncryptionConfig) error {
 	// Get secret's value
 	value, err := GetSecretValueByARN(region, utils.Ptr2str(secret.ARN))
 	if err != nil {
@@ -109,6 +117,17 @@ func (s *SecretSync) saveSecret(region string, secret *secretsmanager.SecretList
 		savingContent = value.SecretBinary
 	} else {
 		return errors.New("secret string and binary isn't defined")
+	}
+
+	if encryption.Method == configs.EncryptionMethodAES256 {
+		aes, err := NewAES(encryption.Key, encryption.Nonce)
+		if err != nil {
+			return errors.Wrap(err, "encrypt saving data")
+		}
+		savingContent, err = aes.Encrypt(savingContent)
+		if err != nil {
+			return errors.Wrap(err, "encrypt saving data")
+		}
 	}
 
 	// save to file

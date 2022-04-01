@@ -25,6 +25,9 @@ import (
 */
 func TestUpdateOpeningExistedKey(t *testing.T) {
 	os.Setenv("SYNC_PERIOD_SECONDS", "1")
+	os.Setenv("AWS_REGION", "ap-southeast-1")
+	os.Setenv("ENCRYPTION_METHOD", "NONE")
+	os.Setenv("FILTER_PREFIX_NAME", "")
 	err := validateEnvironments()
 	assert.NilError(t, err, "validate env")
 
@@ -35,12 +38,12 @@ func TestUpdateOpeningExistedKey(t *testing.T) {
 	assert.NilError(t, err, "prepare AWS Secret")
 
 	go func() {
-		ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
 		cmd.StartSyncProcess(ctx)
 	}()
 
 	// 1.
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// 2.
 	expectedFileName := utils.Md5(TestSecretName)
@@ -61,7 +64,7 @@ func TestUpdateOpeningExistedKey(t *testing.T) {
 	_, err = prepareAWSSecret(os.Getenv("AWS_REGION"), "binary")
 	assert.NilError(t, err, "prepare AWS Secret")
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	// 5.
 	f2, err := os.Open(expectedFilePath)

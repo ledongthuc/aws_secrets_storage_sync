@@ -20,7 +20,7 @@ var (
 )
 
 func prepareAWSSecret(region string, valueType string) (*secretsmanager.SecretListEntry, error) {
-	err := os.RemoveAll("TestSyncPath")
+	err := os.RemoveAll(TestSyncPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "remove old files")
 	}

@@ -6,8 +6,9 @@ import (
 )
 
 type CacheItem struct {
-	FileName    string
-	LastChanged time.Time
+	FileName    string    `json:"file_name"`
+	LocalPath   string    `json:"local_path"`
+	LastChanged time.Time `json:"last_changed"`
 }
 
 type SecretLastChanges struct {
@@ -28,6 +29,17 @@ func (cache *SecretLastChanges) Get(secretName string) (CacheItem, bool) {
 
 	result, existed := cache.inner[secretName]
 	return result, existed
+}
+
+func (cache *SecretLastChanges) All() []CacheItem {
+	cache.l.RLock()
+	defer cache.l.RUnlock()
+
+	list := make([]CacheItem, 0, len(cache.inner))
+	for _, item := range cache.inner {
+		list = append(list, item)
+	}
+	return list
 }
 
 func (cache *SecretLastChanges) SetTime(secretName string, v time.Time) {

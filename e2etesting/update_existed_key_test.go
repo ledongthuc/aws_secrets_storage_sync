@@ -17,6 +17,9 @@ import (
 
 func TestUpdateStringValueOnBinaryValue(t *testing.T) {
 	os.Setenv("SYNC_PERIOD_SECONDS", "1")
+	os.Setenv("AWS_REGION", "ap-southeast-1")
+	os.Setenv("ENCRYPTION_METHOD", "NONE")
+	os.Setenv("FILTER_PREFIX_NAME", "")
 	err := validateEnvironments()
 	assert.NilError(t, err, "validate env")
 
@@ -53,6 +56,8 @@ func TestUpdateStringValueOnBinaryValue(t *testing.T) {
 
 func TestUpdateBinaryValueOnStringValue(t *testing.T) {
 	os.Setenv("SYNC_PERIOD_SECONDS", "1")
+	os.Setenv("AWS_REGION", "ap-southeast-1")
+	os.Setenv("ENCRYPTION_METHOD", "NONE")
 	err := validateEnvironments()
 	assert.NilError(t, err, "validate env")
 

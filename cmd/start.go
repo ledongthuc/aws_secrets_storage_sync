@@ -2,20 +2,23 @@ package cmd
 
 import (
 	"context"
-	"os"
-	"os/signal"
 	"time"
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/ledongthuc/aws_secrets_storage_sync/cache"
 	"github.com/ledongthuc/aws_secrets_storage_sync/configs"
 	"github.com/ledongthuc/aws_secrets_storage_sync/sync"
 )
 
-func StartSyncProcess(ctx context.Context) {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, os.Kill)
-	syncer := sync.NewSecretSync()
+func Start(ctx context.Context) {
+	dataSource := cache.NewSecretLastChanges()
+	go StartSyncProcess(ctx, dataSource)
+	startServer(dataSource)
+}
+
+func StartSyncProcess(ctx context.Context, dataSource *cache.SecretLastChanges) {
+	syncer := sync.NewSecretSync(dataSource)
 
 	timeoutPeriod := configs.GetSyncPeriodSeconds()
 	region := configs.GetAWSRegion()
@@ -27,20 +30,12 @@ func StartSyncProcess(ctx context.Context) {
 	filterPrefixName := configs.GetFilterPrefixName()
 	filterTags := configs.GetFilterTags()
 	filters := sync.BuildAWSFilters(filterPrefixName, filterTags)
+	encryption := configs.GetEncryptionConfig()
 
 	for {
-		if err := syncer.SyncSecrets(region, filters, filterTags); err != nil {
+		if err := syncer.SyncSecrets(region, filters, filterTags, encryption); err != nil {
 			logrus.Warnf("Sync secrets got err: %v", err)
 		}
-
-		select {
-		case <-ctx.Done():
-			logrus.Info("Force exit")
-			return
-		case <-signalChan:
-			logrus.Info("Exit")
-			return
-		case <-time.After(time.Duration(timeoutPeriod) * time.Second):
-		}
+		time.Sleep(time.Duration(timeoutPeriod) * time.Second)
 	}
 }

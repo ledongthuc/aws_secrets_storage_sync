@@ -10,5 +10,5 @@ import (
 func main() {
 	configs.Init()
 	configs.PrintConfigs()
-	cmd.StartSyncProcess(context.Background())
+	cmd.Start(context.Background())
 }

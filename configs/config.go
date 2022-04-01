@@ -13,6 +13,11 @@ var defaultConfigurations = map[string]string{
 	syncPeriodSeconds: "15",
 	filterTags:        "",
 	filterPrefixName:  "",
+
+	awsEncryptionMethod: "NONCE",
+
+	serverIP:   "localhost",
+	serverPort: "8081",
 }
 
 func Init() {
