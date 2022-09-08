@@ -1,4 +1,17 @@
-WORK IN PROGRESS
+# AWS Secrets Storage Sync
+
+AWS secrets Storage Sync is a background job that monitor secrets changes and k
+
+## Setup
+
+## Quick start
+
+### Build locally
+
+### Run with docker
+
+## Configuration support
+
 
 Main Idea:
 
